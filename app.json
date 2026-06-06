@@ -1,14 +1,17 @@
 {
   "expo": {
-    "name": "bjj-scaffold",
-    "slug": "bjj-scaffold",
+    "name": "BJJ Notes",
+    "slug": "bjj-notes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bjjscaffold",
+    "scheme": "bjjnotes",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Record your post-training debriefs."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -34,7 +37,16 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Record your post-training debriefs."
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
