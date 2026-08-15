@@ -25,9 +25,15 @@ load_dotenv(SERVER_DIR / ".env", override=False)
 # as a hard error rather than silently running wide open.
 BJJ_KEY: str = os.environ.get("BJJ_KEY", "")
 
-# SQLite file. On Fly this points at the mounted volume so it survives the
-# machine stopping and starting again.
+# SQLite file. On Fly this MUST point inside the mounted volume (/data), or the
+# database is wiped on every deploy and machine restart.
 DATABASE_PATH: Path = Path(os.environ.get("DATABASE_PATH", "bjj-notes.db"))
+
+# Built frontend (web/dist), served by this app in production. Unset in dev,
+# where Vite serves the frontend and proxies /api here.
+STATIC_DIR: Path | None = (
+    Path(os.environ["STATIC_DIR"]) if os.environ.get("STATIC_DIR") else None
+)
 
 # Groq: https://console.groq.com/keys
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")

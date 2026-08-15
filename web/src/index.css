@@ -1,13 +1,16 @@
 @import 'tailwindcss';
 
 /*
- * Simplistic-modern palette, carried over from the React Native app: warm
- * orange accent on cool zinc neutrals. Hierarchy comes from soft filled
- * surfaces and type, not borders. Dark mode uses a near-black zinc base with a
- * brighter orange.
+ * Simplistic-modern palette: blue accent on cool zinc neutrals. Hierarchy comes
+ * from soft filled surfaces and type, not borders. Dark mode uses a near-black
+ * zinc base with a brighter blue.
  *
  * Tokens are plain CSS variables so the theme swaps at runtime with the OS
  * setting; `@theme inline` maps them to Tailwind utilities (bg-surface, etc.).
+ *
+ * `--color-on-accent` is whatever text sits on a filled accent button. It flips
+ * with the theme because the dark-mode accent is light enough that white text
+ * on it would be unreadable.
  */
 :root {
   --color-fg: #18181b; /* zinc-900 */
@@ -16,8 +19,9 @@
   --color-bg: #ffffff;
   --color-surface: #f4f4f5; /* zinc-100 — soft filled card / input */
   --color-surface-active: #e4e4e7; /* zinc-200 — pressed / selected */
-  --color-accent: #f97316; /* orange-500 */
-  --color-accent-soft: #fff1e8;
+  --color-accent: #2563eb; /* blue-600 */
+  --color-accent-soft: #eff6ff; /* blue-50 — cool wash behind accent text */
+  --color-on-accent: #ffffff;
   --color-danger: #ef4444;
   --color-success: #22c55e;
 }
@@ -30,8 +34,9 @@
     --color-bg: #09090b; /* zinc-950 */
     --color-surface: #18181b; /* zinc-900 */
     --color-surface-active: #27272a; /* zinc-800 */
-    --color-accent: #fb923c; /* orange-400 — brighter on dark */
-    --color-accent-soft: #2a1a0e;
+    --color-accent: #60a5fa; /* blue-400 — brighter on dark */
+    --color-accent-soft: #10203a; /* deep blue wash */
+    --color-on-accent: #0b1120; /* dark text on the light-blue fill */
     --color-danger: #f87171;
     --color-success: #4ade80;
   }
@@ -46,6 +51,7 @@
   --color-surface-active: var(--color-surface-active);
   --color-accent: var(--color-accent);
   --color-accent-soft: var(--color-accent-soft);
+  --color-on-accent: var(--color-on-accent);
   --color-danger: var(--color-danger);
   --color-success: var(--color-success);
 

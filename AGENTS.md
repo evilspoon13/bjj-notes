@@ -55,6 +55,8 @@ npm run build
   together. Server state goes through TanStack Query hooks in `src/lib/queries.ts`.
 - **Design tokens** are CSS variables in `web/src/index.css`, mapped to Tailwind
   utilities via `@theme inline`. Light/dark follows the OS with no JS. Keep the
-  warm-orange-on-zinc, soft-filled-card look.
+  blue-on-zinc, soft-filled-card look. Text on an accent fill uses
+  `text-on-accent`, not `text-white` — the dark-mode accent is too light for
+  white text.
 - **Mobile-first**: design at 390px, then adapt upward. Inputs stay at 16px or
   iOS zooms on focus.

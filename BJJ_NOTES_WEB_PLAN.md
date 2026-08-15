@@ -143,8 +143,8 @@ return the raw transcript even when structuring fails** so a recording is never 
 **Server state**: TanStack Query. `refetchOnWindowFocus` keeps phone and desktop
 in sync for free.
 
-**Styling**: Tailwind v4 with the existing palette as CSS variables — warm orange
-accent (`#F97316` light / `#FB923C` dark) on cool zinc neutrals, soft filled cards
+**Styling**: Tailwind v4 with the palette as CSS variables — blue accent
+(`#2563EB` light / `#60A5FA` dark) on cool zinc neutrals, soft filled cards
 (no borders, ~18px radius, gaps between them), generous whitespace, light + dark.
 Port the `Card` / `Chip` / `Section` / `Button` / `EmptyState` primitives 1:1.
 

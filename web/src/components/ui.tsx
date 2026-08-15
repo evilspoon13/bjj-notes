@@ -86,7 +86,7 @@ export function Button({
   className?: string;
 }) {
   const variants = {
-    primary: 'bg-accent text-white',
+    primary: 'bg-accent text-on-accent',
     subtle: 'bg-surface text-fg',
     danger: 'bg-surface text-danger',
   };

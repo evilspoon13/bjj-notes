@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import config, db, export, groq, pipeline
 from .auth import MissingKeyError, require_key
@@ -228,3 +229,35 @@ def export_all(conn: sqlite3.Connection = Depends(db.get_db)) -> JSONResponse:
 
 
 app.include_router(api)
+
+
+def _mount_frontend() -> None:
+    """Serve the built frontend from this app in production.
+
+    Mounted after the API router so `/api` and `/health` always win. Unknown
+    paths fall back to index.html because the client router owns them — a hard
+    refresh on /journal/3 must not 404.
+
+    Note the frontend is public; the passphrase gate is enforced on the API, so
+    an unauthenticated visitor gets the shell and an unlock screen, nothing more.
+    """
+    static_dir = config.STATIC_DIR
+    if static_dir is None or not static_dir.is_dir():
+        return
+
+    index = static_dir / "index.html"
+
+    # Hashed asset filenames — safe to cache hard.
+    app.mount(
+        "/assets", StaticFiles(directory=static_dir / "assets"), name="assets"
+    )
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        candidate = static_dir / path
+        if path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
+
+
+_mount_frontend()

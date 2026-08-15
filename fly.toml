@@ -1,0 +1,41 @@
+# Fly.io config. See DEPLOY.md for the one-time setup.
+#
+# Single machine by design: the database is a SQLite file on a volume, and a
+# Fly volume attaches to exactly one machine. Scaling past one would silently
+# give the second machine its own empty database — never `fly scale count 2`.
+
+app = "bjj-notes"
+primary_region = "iad" # change to the region nearest you
+
+[build]
+
+[env]
+DATABASE_PATH = "/data/bjj-notes.db"
+
+# Persists across deploys, restarts, and scale-to-zero. Without this the
+# database is destroyed every time the machine recycles.
+[mounts]
+source = "bjj_notes_data"
+destination = "/data"
+initial_size = "1gb"
+
+[http_service]
+internal_port = 8080
+force_https = true
+# Scale to zero when idle; the proxy starts the machine on the next request.
+# Swap "stop" for "suspend" if the cold start feels slow — suspend resumes
+# faster but keeps the machine's memory snapshot around.
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 0
+
+[[http_service.checks]]
+interval = "30s"
+timeout = "5s"
+grace_period = "10s"
+method = "GET"
+path = "/health"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "512mb"
