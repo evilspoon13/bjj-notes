@@ -19,6 +19,7 @@ from ..models import (
     StructuredSession,
 )
 from ..text import derive_title, normalize_name, to_title
+from .sequences import insert_sequence, list_for_session
 from .techniques import upsert_technique
 
 
@@ -85,6 +86,7 @@ def get_session(conn: sqlite3.Connection, session_id: int) -> Session | None:
         rounds=_parse_rounds(row["rounds"]),
         tags=_parse_str_list(row["tags"]),
         techniques=get_session_techniques(conn, session_id),
+        sequences=list_for_session(conn, session_id),
     )
 
 
@@ -218,7 +220,7 @@ def persist_session(
     # nor double-count `times_trained`. The check must come BEFORE the upsert:
     # upserting first would bump the counter for each mention even though only
     # one join row is written.
-    seen: set[str] = set()
+    seen: dict[str, int] = {}
     for technique in structured.techniques:
         if not technique.name.strip():
             continue
@@ -226,7 +228,6 @@ def persist_session(
         name_norm = normalize_name(technique.name)
         if name_norm in seen:
             continue  # same technique mentioned twice in one debrief
-        seen.add(name_norm)
 
         technique_id = upsert_technique(
             conn,
@@ -236,6 +237,7 @@ def persist_session(
             description=technique.session_notes or None,
             now=now,
         )
+        seen[name_norm] = technique_id
 
         conn.execute(
             "INSERT INTO session_techniques (session_id, technique_id, notes)"
@@ -243,4 +245,40 @@ def persist_session(
             (session_id, technique_id, technique.session_notes or None),
         )
 
+    for sequence in structured.sequences:
+        if not sequence.name.strip() or not sequence.steps:
+            continue
+        insert_sequence(
+            conn,
+            session_id=session_id,
+            name=sequence.name,
+            steps=sequence.steps,
+            position=sequence.position,
+            technique_id=_resolve_technique(conn, sequence.technique, seen),
+            notes=sequence.notes,
+        )
+
     return session_id
+
+
+def _resolve_technique(
+    conn: sqlite3.Connection, name: str | None, in_this_session: dict[str, int]
+) -> int | None:
+    """Match a sequence's stated endpoint to a technique id.
+
+    Checks the techniques from this same debrief first (the common case, since
+    the prompt asks the model to reuse those names), then the wider library.
+    An unmatched name simply leaves the sequence unlinked — a wrong link would
+    be worse than none.
+    """
+    if not name or not name.strip():
+        return None
+
+    name_norm = normalize_name(name)
+    if name_norm in in_this_session:
+        return in_this_session[name_norm]
+
+    row = conn.execute(
+        "SELECT id FROM techniques WHERE name_norm = ?", (name_norm,)
+    ).fetchone()
+    return int(row["id"]) if row else None

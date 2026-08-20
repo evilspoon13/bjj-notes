@@ -12,13 +12,16 @@ be edited by hand.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
 
 from . import config, groq
-from .models import StructuredSession
+from .models import StructuredSession, StructuredTechniqueDetail
 from .repositories.sessions import persist_session
 from .repositories.techniques import list_technique_names
+
+log = logging.getLogger(__name__)
 
 # Groq's free tier caps uploads at 25 MB. Rejecting early gives a clear error
 # instead of an opaque 413 from the API.
@@ -90,14 +93,18 @@ def structure_transcript(
         return groq.structure(
             transcript, existing, api_key=api_key, model=config.STRUCTURE_MODEL
         ), None
-    except groq.GroqError:
-        pass  # retry once before giving up
+    except groq.GroqError as exc:
+        # Log both attempts. The failure is swallowed into the response so the
+        # transcript still gets saved, which means the log is the only place the
+        # cause is ever recorded.
+        log.warning("Structuring failed (attempt 1/2), retrying: %s", exc)
 
     try:
         return groq.structure(
             transcript, existing, api_key=api_key, model=config.STRUCTURE_MODEL
         ), None
     except groq.GroqError as exc:
+        log.error("Structuring failed (attempt 2/2), saving transcript only: %s", exc)
         return StructuredSession(), str(exc)
 
 
@@ -112,6 +119,29 @@ def process_transcript(conn: sqlite3.Connection, transcript: str) -> PipelineRes
         transcript=transcript,
         structuring_failed=error is not None,
         error=error,
+    )
+
+
+def structure_technique(
+    conn: sqlite3.Connection, text: str
+) -> StructuredTechniqueDetail:
+    """Structure a standalone technique write-up, retrying once.
+
+    Unlike a session, there is nothing worth persisting if this fails — the user
+    still has their text in the box — so a failure propagates as a GroqError.
+    """
+    api_key = _require_api_key()
+    existing = list_technique_names(conn)
+
+    try:
+        return groq.structure_technique(
+            text, existing, api_key=api_key, model=config.STRUCTURE_MODEL
+        )
+    except groq.GroqError as exc:
+        log.warning("Technique structuring failed (attempt 1/2), retrying: %s", exc)
+
+    return groq.structure_technique(
+        text, existing, api_key=api_key, model=config.STRUCTURE_MODEL
     )
 
 

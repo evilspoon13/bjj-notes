@@ -11,12 +11,15 @@ const TABS = [
   { to: '/', label: 'Record', end: true },
   { to: '/journal', label: 'Journal', end: false },
   { to: '/library', label: 'Library', end: false },
+  { to: '/sequences', label: 'Sequences', end: false },
   { to: '/settings', label: 'Settings', end: false },
 ];
 
 function tabClass({ isActive }: { isActive: boolean }): string {
   return cx(
-    'flex-1 rounded-xl px-3 py-2 text-center text-sm font-semibold transition-colors',
+    // Five tabs on a 390px screen: shrink the padding and let the label size
+    // step up on wider phones rather than wrapping.
+    'flex-1 rounded-xl px-1.5 py-2 text-center text-xs font-semibold transition-colors sm:px-3 sm:text-sm',
     isActive ? 'bg-accent-soft text-accent' : 'text-fg-muted hover:text-fg'
   );
 }

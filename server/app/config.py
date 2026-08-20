@@ -38,4 +38,7 @@ STATIC_DIR: Path | None = (
 # Groq: https://console.groq.com/keys
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 TRANSCRIBE_MODEL: str = os.environ.get("TRANSCRIBE_MODEL", "whisper-large-v3")
-STRUCTURE_MODEL: str = os.environ.get("STRUCTURE_MODEL", "llama-3.3-70b-versatile")
+# Groq retires models on a rolling schedule — `llama-3.3-70b-versatile` was the
+# default until it started 404ing. `scripts/check_groq.py` lists what the key can
+# currently reach.
+STRUCTURE_MODEL: str = os.environ.get("STRUCTURE_MODEL", "openai/gpt-oss-120b")

@@ -45,6 +45,19 @@ npm run build
   unrecoverable. This bit the mobile app once; don't reintroduce it.
 - **JSON-array columns** (`went_well`, `to_improve`, `rounds`, `tags`) are stored
   as TEXT and decoded in `server/app/repositories/sessions.py`.
+- **Sequences vs techniques.** A technique is a named move; it dedups into a
+  library and its `steps` / `key_details` / `tips` describe how to execute
+  *that move alone*. A sequence is the ordered chain of grips and movements
+  linking moves together; it is **per-session and never merged**, and carries a
+  nullable `technique_id` for the technique it arrives at (`ON DELETE SET NULL`
+  — losing a technique must not delete the steps). Extract both from one
+  debrief, never one instead of the other, and keep chaining out of a
+  technique's own steps.
+- **Techniques can be authored directly** (`POST /api/techniques`), not just
+  harvested from sessions. Authoring an existing name only fills empty fields
+  and never touches `times_trained` — adding a move to the library is not the
+  same as having drilled it, and silently replacing curated notes would be
+  worse than doing nothing.
 - **Dedup** is keyed on `name_norm` (trimmed, lowercased, whitespace-collapsed).
   Existing technique names are passed into the structuring prompt so the model
   reuses canonical names. Dedup within a single debrief must happen *before* the

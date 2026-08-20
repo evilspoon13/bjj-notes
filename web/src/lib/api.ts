@@ -3,6 +3,8 @@
 import { clearKey, getKey } from './key';
 import type {
   CreatedSession,
+  CreatedTechnique,
+  Sequence,
   Session,
   SessionListItem,
   SessionUpdate,
@@ -105,6 +107,17 @@ export const api = {
   },
 
   getTechnique: (id: number) => request<TechniqueDetail>(`/api/techniques/${id}`),
+
+  createTechnique: (text: string) =>
+    request<CreatedTechnique>('/api/techniques', json({ text })),
+
+  listSequences: (search?: string) => {
+    const suffix = search ? `?search=${encodeURIComponent(search)}` : '';
+    return request<Sequence[]>(`/api/sequences${suffix}`);
+  },
+
+  deleteSequence: (id: number) =>
+    request<void>(`/api/sequences/${id}`, { method: 'DELETE' }),
 
   updateTechnique: (id: number, body: TechniqueUpdate) =>
     request<TechniqueDetail>(`/api/techniques/${id}`, { ...json(body), method: 'PATCH' }),

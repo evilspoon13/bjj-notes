@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import db
+from .repositories.sequences import list_sequences
 from .repositories.sessions import get_session, list_sessions
 from .repositories.techniques import list_techniques
 
@@ -35,7 +36,11 @@ def build_export(conn: sqlite3.Connection) -> dict[str, Any]:
         "counts": {
             "sessions": len(sessions),
             "techniques": len(list_techniques(conn)),
+            "sequences": len(list_sequences(conn)),
         },
         "sessions": sessions,
         "techniques": [t.model_dump() for t in list_techniques(conn, sort="name")],
+        # Also nested inside each session; repeated flat so the export stands
+        # alone as a browsable record.
+        "sequences": [s.model_dump() for s in list_sequences(conn)],
     }

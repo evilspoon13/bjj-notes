@@ -14,6 +14,23 @@ export type SessionTechnique = {
   notes: string | null;
 };
 
+/**
+ * An ordered chain of grips and movements. Unlike techniques, sequences are
+ * per-session and never merged — the same entry described twice is two records.
+ */
+export type Sequence = {
+  id: number;
+  session_id: number;
+  session_title: string;
+  created_at: string;
+  name: string;
+  steps: string[];
+  position: string | null;
+  technique_id: number | null;
+  technique_name: string | null;
+  notes: string | null;
+};
+
 export type SessionListItem = {
   id: number;
   created_at: string;
@@ -33,6 +50,7 @@ export type Session = {
   rounds: Round[];
   tags: string[];
   techniques: SessionTechnique[];
+  sequences: Sequence[];
 };
 
 /** POST responses add the transient pipeline status. */
@@ -49,15 +67,28 @@ export type SessionUpdate = {
   tags: string[];
 };
 
+/**
+ * A move in the library. `steps` / `key_details` / `tips` describe how to do the
+ * move itself; how it chains with other moves lives in `Sequence`.
+ */
 export type Technique = {
   id: number;
   name: string;
   category: string | null;
   position: string | null;
   description: string | null;
+  steps: string[];
+  key_details: string[];
+  tips: string[];
   times_trained: number;
   first_seen: string;
   last_seen: string;
+};
+
+export type CreatedTechnique = {
+  technique: TechniqueDetail;
+  /** False when the name already existed and only empty fields were filled. */
+  created: boolean;
 };
 
 export type TechniqueSession = {
@@ -69,6 +100,8 @@ export type TechniqueSession = {
 
 export type TechniqueDetail = Technique & {
   sessions: TechniqueSession[];
+  /** The ways you've arrived at this technique. */
+  sequences: Sequence[];
 };
 
 export type TechniqueUpdate = {
@@ -76,6 +109,9 @@ export type TechniqueUpdate = {
   category: string | null;
   position: string | null;
   description: string | null;
+  steps: string[];
+  key_details: string[];
+  tips: string[];
 };
 
 export type TechniqueSort = 'recency' | 'frequency' | 'name';

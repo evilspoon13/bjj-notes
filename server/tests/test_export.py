@@ -42,16 +42,17 @@ def seeded(conn: sqlite3.Connection) -> sqlite3.Connection:
 
 def test_export_of_empty_database(client: TestClient) -> None:
     body = client.get("/api/export").json()
-    assert body["counts"] == {"sessions": 0, "techniques": 0}
+    assert body["counts"] == {"sessions": 0, "techniques": 0, "sequences": 0}
     assert body["sessions"] == []
     assert body["techniques"] == []
+    assert body["sequences"] == []
     assert body["format_version"] == 1
 
 
 def test_export_contains_everything(client: TestClient, seeded: sqlite3.Connection) -> None:
     body = client.get("/api/export").json()
 
-    assert body["counts"] == {"sessions": 1, "techniques": 1}
+    assert body["counts"] == {"sessions": 1, "techniques": 1, "sequences": 0}
     assert body["exported_at"]
     assert body["schema_version"] >= 1
 

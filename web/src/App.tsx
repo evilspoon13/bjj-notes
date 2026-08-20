@@ -5,7 +5,9 @@ import { KeyGate } from '@/components/KeyGate';
 import { Layout } from '@/components/Layout';
 import { Journal } from '@/routes/Journal';
 import { Library } from '@/routes/Library';
+import { NewTechnique } from '@/routes/NewTechnique';
 import { Record } from '@/routes/Record';
+import { Sequences } from '@/routes/Sequences';
 import { SessionDetail } from '@/routes/SessionDetail';
 import { Settings } from '@/routes/Settings';
 import { TechniqueDetail } from '@/routes/TechniqueDetail';
@@ -33,7 +35,11 @@ export default function App() {
               <Route path="journal" element={<Journal />} />
               <Route path="journal/:id" element={<SessionDetail />} />
               <Route path="library" element={<Library />} />
+              {/* Static segment before the dynamic one so /library/new can
+                  never be read as a technique id. */}
+              <Route path="library/new" element={<NewTechnique />} />
               <Route path="library/:id" element={<TechniqueDetail />} />
+              <Route path="sequences" element={<Sequences />} />
               <Route path="settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

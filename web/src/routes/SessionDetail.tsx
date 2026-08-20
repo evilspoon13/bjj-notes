@@ -1,24 +1,43 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { DetailHeader } from '@/components/Layout';
+import { SequenceCard } from '@/components/SequenceCard';
 import { Button, Card, Chip, ErrorNote, Field, Spinner } from '@/components/ui';
 import { longDate } from '@/lib/format';
 import { useDeleteSession, useSession, useUpdateSession } from '@/lib/queries';
 import type { Session } from '@/types';
 
+/** Notice handed over by the record screen when structuring failed. */
+type SessionNotice = { warning?: string; detail?: string | null };
+
 export function SessionDetail() {
   const id = Number(useParams().id);
   const { data, isPending, error } = useSession(id);
   const [editing, setEditing] = useState(false);
+  const notice = (useLocation().state ?? {}) as SessionNotice;
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorNote>{(error as Error).message}</ErrorNote>;
 
-  return editing ? (
-    <EditSession session={data} onDone={() => setEditing(false)} />
-  ) : (
-    <ViewSession session={data} onEdit={() => setEditing(true)} />
+  return (
+    <div className="flex flex-col gap-4">
+      {notice.warning && (
+        <ErrorNote>
+          {notice.warning}
+          {/* The Groq error itself, so a real outage isn't indistinguishable
+              from the model just having nothing to say. */}
+          {notice.detail && (
+            <span className="mt-1 block text-xs opacity-80">{notice.detail}</span>
+          )}
+        </ErrorNote>
+      )}
+      {editing ? (
+        <EditSession session={data} onDone={() => setEditing(false)} />
+      ) : (
+        <ViewSession session={data} onEdit={() => setEditing(true)} />
+      )}
+    </div>
   );
 }
 
@@ -67,6 +86,17 @@ function ViewSession({ session, onEdit }: { session: Session; onEdit: () => void
 
       <BulletCard title="What went well" items={session.went_well} tone="success" />
       <BulletCard title="To improve" items={session.to_improve} tone="accent" />
+
+      {session.sequences.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-bold tracking-wide text-fg-faint uppercase">
+            Sequences
+          </h2>
+          {session.sequences.map((sequence) => (
+            <SequenceCard key={sequence.id} sequence={sequence} context="technique" />
+          ))}
+        </section>
+      )}
 
       {session.rounds.length > 0 && (
         <Card>

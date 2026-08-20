@@ -20,14 +20,18 @@ from . import config, db, export, groq, pipeline
 from .auth import MissingKeyError, require_key
 from .models import (
     CreatedSession,
+    CreatedTechnique,
     Session,
     SessionCreate,
+    Sequence,
     SessionListItem,
     SessionUpdate,
     Technique,
+    TechniqueCreate,
     TechniqueDetail,
     TechniqueUpdate,
 )
+from .repositories import sequences as sequences_repo
 from .repositories import sessions as sessions_repo
 from .repositories import techniques as techniques_repo
 from .repositories.techniques import DuplicateTechniqueError, TechniqueSort
@@ -174,6 +178,39 @@ def list_techniques(
     return techniques_repo.list_techniques(conn, search=search, sort=sort)
 
 
+@api.post(
+    "/techniques", response_model=CreatedTechnique, status_code=status.HTTP_201_CREATED
+)
+def create_technique(
+    body: TechniqueCreate,
+    conn: sqlite3.Connection = Depends(db.get_db),
+) -> CreatedTechnique:
+    """Add a technique directly, without a session. The LLM structures the text."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Text is empty.")
+
+    try:
+        detail = pipeline.structure_technique(conn, text)
+    except pipeline.MissingApiKeyError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    except groq.GroqError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+    if not detail.name.strip():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Could not identify a technique in that text.",
+        )
+
+    technique_id, created = techniques_repo.create_or_enrich_technique(conn, detail)
+    conn.commit()
+
+    stored = techniques_repo.get_technique(conn, technique_id)
+    assert stored is not None
+    return CreatedTechnique(technique=stored, created=created)
+
+
 @api.get("/techniques/{technique_id}", response_model=TechniqueDetail)
 def get_technique(
     technique_id: int,
@@ -212,6 +249,36 @@ def delete_technique(
 ) -> None:
     if not techniques_repo.delete_technique(conn, technique_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Technique not found.")
+    conn.commit()
+
+
+@api.get("/sequences", response_model=list[Sequence])
+def list_sequences(
+    search: str | None = None,
+    conn: sqlite3.Connection = Depends(db.get_db),
+) -> list[Sequence]:
+    """Every sequence across all sessions, newest first."""
+    return sequences_repo.list_sequences(conn, search=search)
+
+
+@api.get("/sequences/{sequence_id}", response_model=Sequence)
+def get_sequence(
+    sequence_id: int,
+    conn: sqlite3.Connection = Depends(db.get_db),
+) -> Sequence:
+    sequence = sequences_repo.get_sequence(conn, sequence_id)
+    if sequence is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sequence not found.")
+    return sequence
+
+
+@api.delete("/sequences/{sequence_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sequence(
+    sequence_id: int,
+    conn: sqlite3.Connection = Depends(db.get_db),
+) -> None:
+    if not sequences_repo.delete_sequence(conn, sequence_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sequence not found.")
     conn.commit()
 
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Card, Chip, EmptyState, ErrorNote, Spinner, cx } from '@/components/ui';
 import { statDate } from '@/lib/format';
@@ -18,7 +19,15 @@ export function Library() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-extrabold">Library</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-extrabold">Library</h1>
+        <Link
+          to="/library/new"
+          className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent"
+        >
+          Add
+        </Link>
+      </div>
 
       <input
         value={search}
@@ -54,7 +63,14 @@ export function Library() {
           subtitle={
             search
               ? 'Try a different search.'
-              : 'Techniques are added automatically from your session debriefs.'
+              : 'Techniques are pulled from your session debriefs — or add one directly.'
+          }
+          action={
+            search ? undefined : (
+              <Link to="/library/new" className="font-semibold text-accent">
+                Add a technique →
+              </Link>
+            )
           }
         />
       )}

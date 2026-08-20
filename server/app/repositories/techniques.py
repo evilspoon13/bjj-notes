@@ -7,11 +7,20 @@ catches casing and spacing variants of the same name.
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import datetime, timezone
 from typing import Literal
 
-from ..models import Technique, TechniqueDetail, TechniqueSession, TechniqueUpdate
+from ..models import (
+    StructuredTechniqueDetail,
+    Technique,
+    TechniqueDetail,
+    TechniqueSession,
+    TechniqueUpdate,
+)
 from ..text import derive_title, normalize_name
+from .sequences import list_for_technique
 
 TechniqueSort = Literal["recency", "frequency", "name"]
 
@@ -31,6 +40,24 @@ class DuplicateTechniqueError(Exception):
         self.name = name
 
 
+def _parse_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _map(row: sqlite3.Row) -> dict:
+    """Row → Technique kwargs, decoding the JSON-array columns."""
+    data = {k: row[k] for k in row.keys() if k != "name_norm"}
+    for key in ("steps", "key_details", "tips"):
+        data[key] = _parse_list(row[key])
+    return data
+
+
 def list_techniques(
     conn: sqlite3.Connection,
     *,
@@ -47,7 +74,7 @@ def list_techniques(
     else:
         rows = conn.execute(f"SELECT * FROM techniques ORDER BY {order_by}").fetchall()
 
-    return [Technique.model_validate(dict(row)) for row in rows]
+    return [Technique.model_validate(_map(row)) for row in rows]
 
 
 def get_technique(conn: sqlite3.Connection, technique_id: int) -> TechniqueDetail | None:
@@ -58,8 +85,9 @@ def get_technique(conn: sqlite3.Connection, technique_id: int) -> TechniqueDetai
         return None
 
     return TechniqueDetail(
-        **{k: row[k] for k in row.keys() if k != "name_norm"},
+        **_map(row),
         sessions=get_technique_sessions(conn, technique_id),
+        sequences=list_for_technique(conn, technique_id),
     )
 
 
@@ -103,7 +131,8 @@ def update_technique(
         cursor = conn.execute(
             """
             UPDATE techniques
-               SET name = ?, name_norm = ?, category = ?, position = ?, description = ?
+               SET name = ?, name_norm = ?, category = ?, position = ?,
+                   description = ?, steps = ?, key_details = ?, tips = ?
              WHERE id = ?
             """,
             (
@@ -112,6 +141,9 @@ def update_technique(
                 fields.category,
                 fields.position,
                 fields.description,
+                json.dumps(fields.steps),
+                json.dumps(fields.key_details),
+                json.dumps(fields.tips),
                 technique_id,
             ),
         )
@@ -137,6 +169,72 @@ def list_technique_names(conn: sqlite3.Connection) -> list[str]:
         "SELECT name FROM techniques ORDER BY name COLLATE NOCASE"
     ).fetchall()
     return [row["name"] for row in rows]
+
+
+def create_or_enrich_technique(
+    conn: sqlite3.Connection, detail: StructuredTechniqueDetail
+) -> tuple[int, bool]:
+    """Add a technique authored directly, outside any session.
+
+    Returns `(technique_id, created)`. If the name already exists, only fields
+    that are currently empty get filled in — anything already written stays,
+    because silently replacing curated notes would be worse than doing nothing.
+
+    `times_trained` is untouched: adding a move to the library is not the same
+    as having drilled it, and only session entries should move that count.
+    """
+    name = detail.name.strip()
+    name_norm = normalize_name(name)
+    now = datetime.now(timezone.utc).isoformat()
+
+    existing = conn.execute(
+        "SELECT * FROM techniques WHERE name_norm = ?", (name_norm,)
+    ).fetchone()
+
+    if existing:
+        current = _map(existing)
+        conn.execute(
+            """
+            UPDATE techniques
+               SET category = COALESCE(category, ?),
+                   position = COALESCE(position, ?),
+                   description = COALESCE(description, ?),
+                   steps = ?, key_details = ?, tips = ?
+             WHERE id = ?
+            """,
+            (
+                detail.category,
+                detail.position,
+                detail.description,
+                json.dumps(current["steps"] or detail.steps),
+                json.dumps(current["key_details"] or detail.key_details),
+                json.dumps(current["tips"] or detail.tips),
+                existing["id"],
+            ),
+        )
+        return int(existing["id"]), False
+
+    cursor = conn.execute(
+        """
+        INSERT INTO techniques
+            (name, name_norm, category, position, description,
+             steps, key_details, tips, times_trained, first_seen, last_seen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        """,
+        (
+            name,
+            name_norm,
+            detail.category,
+            detail.position,
+            detail.description,
+            json.dumps(detail.steps),
+            json.dumps(detail.key_details),
+            json.dumps(detail.tips),
+            now,
+            now,
+        ),
+    )
+    return int(cursor.lastrowid), True
 
 
 def upsert_technique(

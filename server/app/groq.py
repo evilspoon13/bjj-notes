@@ -16,8 +16,14 @@ from typing import Any
 
 import httpx
 
-from .models import Round, StructuredSession, StructuredTechnique
-from .prompts import SYSTEM_PROMPT
+from .models import (
+    Round,
+    StructuredSequence,
+    StructuredSession,
+    StructuredTechnique,
+    StructuredTechniqueDetail,
+)
+from .prompts import SYSTEM_PROMPT, TECHNIQUE_PROMPT
 from .text import first_sentence, to_title
 
 GROQ_BASE = "https://api.groq.com/openai/v1"
@@ -63,14 +69,14 @@ def transcribe(
     return response.text.strip()
 
 
-def structure(
-    transcript: str,
-    existing_technique_names: list[str],
+def _chat(
     *,
+    system: str,
+    user: dict[str, Any],
     api_key: str,
     model: str,
-) -> StructuredSession:
-    """Structure a transcript into the session schema using JSON mode."""
+) -> Any:
+    """One JSON-mode chat completion. Returns the parsed JSON object."""
     try:
         response = httpx.post(
             f"{GROQ_BASE}/chat/completions",
@@ -83,16 +89,8 @@ def structure(
                 "temperature": 0.2,
                 "response_format": {"type": "json_object"},
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {
-                                "transcript": transcript,
-                                "existing_techniques": existing_technique_names,
-                            }
-                        ),
-                    },
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": json.dumps(user)},
                 ],
             },
             timeout=STRUCTURE_TIMEOUT,
@@ -115,11 +113,65 @@ def structure(
         raise GroqError("Structuring returned no content.")
 
     try:
-        parsed = json.loads(content)
+        return json.loads(content)
     except json.JSONDecodeError as exc:
         raise GroqError("Structuring returned malformed JSON.") from exc
 
-    return normalize_structured(parsed)
+
+def structure(
+    transcript: str,
+    existing_technique_names: list[str],
+    *,
+    api_key: str,
+    model: str,
+) -> StructuredSession:
+    """Structure a transcript into the session schema using JSON mode."""
+    content = _chat(
+        system=SYSTEM_PROMPT,
+        user={
+            "transcript": transcript,
+            "existing_techniques": existing_technique_names,
+        },
+        api_key=api_key,
+        model=model,
+    )
+    return normalize_structured(content)
+
+
+def structure_technique(
+    text: str,
+    existing_technique_names: list[str],
+    *,
+    api_key: str,
+    model: str,
+) -> StructuredTechniqueDetail:
+    """Structure a standalone technique write-up (not tied to a session)."""
+    content = _chat(
+        system=TECHNIQUE_PROMPT,
+        user={"text": text, "existing_techniques": existing_technique_names},
+        api_key=api_key,
+        model=model,
+    )
+    return normalize_technique(content)
+
+
+def normalize_technique(raw: Any) -> StructuredTechniqueDetail:
+    """Coerce model output into a well-formed technique, tolerating omissions."""
+    obj: dict[str, Any] = raw if isinstance(raw, dict) else {}
+
+    def text_or_none(key: str) -> str | None:
+        value = obj.get(key)
+        return value.strip() or None if isinstance(value, str) else None
+
+    return StructuredTechniqueDetail(
+        name=obj["name"].strip() if isinstance(obj.get("name"), str) else "",
+        category=obj["category"] if isinstance(obj.get("category"), str) else "Other",
+        position=text_or_none("position"),
+        description=text_or_none("description"),
+        steps=_string_list(obj.get("steps")),
+        key_details=_string_list(obj.get("key_details")),
+        tips=_string_list(obj.get("tips")),
+    )
 
 
 def _string_list(value: Any) -> list[str]:
@@ -172,6 +224,29 @@ def normalize_structured(raw: Any) -> StructuredSession:
                 )
             )
 
+    sequences: list[StructuredSequence] = []
+    if isinstance(obj.get("sequences"), list):
+        for item in obj["sequences"]:
+            entry = item if isinstance(item, dict) else {}
+            name = entry["name"] if isinstance(entry.get("name"), str) else ""
+            steps = _string_list(entry.get("steps"))
+            # A sequence with no name or no steps carries no information.
+            if not name.strip() or not steps:
+                continue
+            sequences.append(
+                StructuredSequence(
+                    name=name.strip(),
+                    steps=steps,
+                    position=(
+                        entry["position"] if isinstance(entry.get("position"), str) else None
+                    ),
+                    technique=(
+                        entry["technique"] if isinstance(entry.get("technique"), str) else None
+                    ),
+                    notes=entry["notes"] if isinstance(entry.get("notes"), str) else None,
+                )
+            )
+
     summary = obj["summary"] if isinstance(obj.get("summary"), str) else ""
 
     # The prompt asks for a short title, but models drift — clamp it here so a
@@ -187,4 +262,5 @@ def normalize_structured(raw: Any) -> StructuredSession:
         tags=_string_list(obj.get("tags")),
         rounds=rounds,
         techniques=techniques,
+        sequences=sequences,
     )

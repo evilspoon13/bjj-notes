@@ -14,7 +14,6 @@ import { useCreateSession } from '@/lib/queries';
 
 export function Record() {
   const [transcript, setTranscript] = useState('');
-  const [warning, setWarning] = useState<string | null>(null);
   const create = useCreateSession();
   const navigate = useNavigate();
 
@@ -22,18 +21,22 @@ export function Record() {
     const text = transcript.trim();
     if (!text) return;
 
-    setWarning(null);
     const session = await create.mutateAsync(text);
     setTranscript('');
 
-    if (session.structuring_failed) {
-      // The debrief was saved regardless — say so plainly rather than
-      // presenting it as a failure, since nothing was lost.
-      setWarning(
-        'Saved, but the AI could not organize it. Open the session to edit it by hand.'
-      );
-    }
-    navigate(`/journal/${session.id}`);
+    // The debrief was saved regardless — say so plainly rather than presenting
+    // it as a failure, since nothing was lost. The notice is handed to the
+    // session page rather than shown here: this screen unmounts on the
+    // navigate below, so anything rendered here would flash and vanish.
+    navigate(`/journal/${session.id}`, {
+      state: session.structuring_failed
+        ? {
+            warning:
+              'Saved, but the AI could not organize it — you can edit it by hand.',
+            detail: session.error,
+          }
+        : undefined,
+    });
   };
 
   return (
@@ -55,7 +58,6 @@ export function Record() {
       />
 
       {create.isError && <ErrorNote>{(create.error as Error).message}</ErrorNote>}
-      {warning && <ErrorNote>{warning}</ErrorNote>}
 
       <Button
         onClick={() => void submit()}

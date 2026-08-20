@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { DetailHeader } from '@/components/Layout';
+import { SequenceCard } from '@/components/SequenceCard';
 import { Button, Card, Chip, ErrorNote, Field, Spinner } from '@/components/ui';
 import { shortDate, statDate } from '@/lib/format';
 import { useDeleteTechnique, useTechnique, useUpdateTechnique } from '@/lib/queries';
@@ -76,16 +77,47 @@ function ViewTechnique({
         <Stat value={statDate(technique.last_seen)} label="last" />
       </div>
 
-      <Card>
-        <h2 className="text-xs font-bold tracking-wide text-fg-faint uppercase">Notes</h2>
-        {technique.description ? (
-          <p className="whitespace-pre-wrap">{technique.description}</p>
-        ) : (
+      {technique.description && <p className="px-1">{technique.description}</p>}
+
+      {technique.steps.length > 0 && (
+        <Card>
+          <h2 className="text-xs font-bold tracking-wide text-fg-faint uppercase">
+            Steps
+          </h2>
+          <ol className="flex flex-col gap-1.5">
+            {technique.steps.map((step, i) => (
+              <li key={i} className="flex gap-2.5">
+                <span className="mt-0.5 w-5 shrink-0 text-xs font-bold text-accent tabular-nums">
+                  {i + 1}.
+                </span>
+                <span className="text-sm">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </Card>
+      )}
+
+      <BulletCard title="Key details" items={technique.key_details} />
+      <BulletCard title="Tips & tricks" items={technique.tips} />
+
+      {!hasDetail(technique) && (
+        <Card>
           <button onClick={onEdit} className="text-left text-fg-faint">
-            No notes yet. Tap to add the details you couldn’t capture out loud.
+            No detail on this move yet. Tap to add the steps, key details, and tips.
           </button>
-        )}
-      </Card>
+        </Card>
+      )}
+
+      {technique.sequences.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-bold tracking-wide text-fg-faint uppercase">
+            Ways in
+          </h2>
+          {technique.sequences.map((sequence) => (
+            <SequenceCard key={sequence.id} sequence={sequence} context="session" />
+          ))}
+        </section>
+      )}
 
       <Card className="!p-2">
         <h2 className="px-2 pt-2 text-xs font-bold tracking-wide text-fg-faint uppercase">
@@ -108,6 +140,33 @@ function ViewTechnique({
         </div>
       </Card>
     </article>
+  );
+}
+
+/** True once the move has any authored detail of its own. */
+function hasDetail(technique: Detail): boolean {
+  return Boolean(
+    technique.description ||
+      technique.steps.length ||
+      technique.key_details.length ||
+      technique.tips.length
+  );
+}
+
+function BulletCard({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <Card>
+      <h2 className="text-xs font-bold tracking-wide text-fg-faint uppercase">{title}</h2>
+      <ul className="flex flex-col gap-1.5">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-accent">•</span>
+            <span className="text-sm">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -138,11 +197,20 @@ function Stat({
   );
 }
 
+const toLines = (text: string) =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
 function EditTechnique({ technique, onDone }: { technique: Detail; onDone: () => void }) {
   const [name, setName] = useState(technique.name);
   const [category, setCategory] = useState(technique.category ?? '');
   const [position, setPosition] = useState(technique.position ?? '');
   const [description, setDescription] = useState(technique.description ?? '');
+  const [steps, setSteps] = useState(technique.steps.join('\n'));
+  const [keyDetails, setKeyDetails] = useState(technique.key_details.join('\n'));
+  const [tips, setTips] = useState(technique.tips.join('\n'));
   const update = useUpdateTechnique(technique.id);
 
   const save = async () => {
@@ -151,6 +219,9 @@ function EditTechnique({ technique, onDone }: { technique: Detail; onDone: () =>
       category: category.trim() || null,
       position: position.trim() || null,
       description: description.trim() || null,
+      steps: toLines(steps),
+      key_details: toLines(keyDetails),
+      tips: toLines(tips),
     });
     onDone();
   };
@@ -172,10 +243,31 @@ function EditTechnique({ technique, onDone }: { technique: Detail; onDone: () =>
       />
       <Field label="Position" value={position} onChange={setPosition} />
       <Field
-        label="Notes"
-        hint="Details you couldn’t capture out loud."
+        label="Summary"
+        hint="One sentence on what the move is."
         value={description}
         onChange={setDescription}
+        multiline
+      />
+      <Field
+        label="Steps"
+        hint="How to do the move. One per line, in order."
+        value={steps}
+        onChange={setSteps}
+        multiline
+      />
+      <Field
+        label="Key details"
+        hint="Angles, grips, weight, timing. One per line."
+        value={keyDetails}
+        onChange={setKeyDetails}
+        multiline
+      />
+      <Field
+        label="Tips & tricks"
+        hint="Common mistakes and troubleshooting. One per line."
+        value={tips}
+        onChange={setTips}
         multiline
       />
 

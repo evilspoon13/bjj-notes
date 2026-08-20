@@ -24,8 +24,22 @@ class StructuredTechnique(BaseModel):
     session_notes: str = ""
 
 
+class StructuredSequence(BaseModel):
+    """An ordered chain of grips and movements described in the debrief.
+
+    `technique` is the name of the technique or position the chain arrives at;
+    it is resolved to a real technique id at persist time when it matches one.
+    """
+
+    name: str
+    steps: list[str] = Field(default_factory=list)
+    position: str | None = None
+    technique: str | None = None
+    notes: str | None = None
+
+
 class StructuredSession(BaseModel):
-    """What the LLM returns for a transcript (Phase 2 fills this for real)."""
+    """What the LLM returns for a transcript."""
 
     title: str = ""
     summary: str = ""
@@ -34,6 +48,7 @@ class StructuredSession(BaseModel):
     tags: list[str] = Field(default_factory=list)
     rounds: list[Round] = Field(default_factory=list)
     techniques: list[StructuredTechnique] = Field(default_factory=list)
+    sequences: list[StructuredSequence] = Field(default_factory=list)
 
 
 class SessionTechnique(BaseModel):
@@ -43,6 +58,21 @@ class SessionTechnique(BaseModel):
     name: str
     category: str | None = None
     position: str | None = None
+    notes: str | None = None
+
+
+class Sequence(BaseModel):
+    """A stored sequence, with enough session context to stand alone in a list."""
+
+    id: int
+    session_id: int
+    session_title: str
+    created_at: str
+    name: str
+    steps: list[str] = Field(default_factory=list)
+    position: str | None = None
+    technique_id: int | None = None
+    technique_name: str | None = None
     notes: str | None = None
 
 
@@ -67,6 +97,7 @@ class Session(BaseModel):
     rounds: list[Round] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     techniques: list[SessionTechnique] = Field(default_factory=list)
+    sequences: list[Sequence] = Field(default_factory=list)
 
 
 class CreatedSession(Session):
@@ -81,14 +112,41 @@ class CreatedSession(Session):
 
 
 class Technique(BaseModel):
+    """A move in the library.
+
+    `steps` / `key_details` / `tips` describe how to execute the move itself.
+    How it chains with other moves belongs in `sequences`, not here.
+    """
+
     id: int
     name: str
     category: str | None = None
     position: str | None = None
     description: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    key_details: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
     times_trained: int
     first_seen: str
     last_seen: str
+
+
+class StructuredTechniqueDetail(BaseModel):
+    """What the LLM returns when structuring a standalone technique write-up."""
+
+    name: str = ""
+    category: str = "Other"
+    position: str | None = None
+    description: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    key_details: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+
+
+class TechniqueCreate(BaseModel):
+    """Free text describing a move; the LLM structures it."""
+
+    text: str = Field(min_length=1)
 
 
 class TechniqueSession(BaseModel):
@@ -103,12 +161,29 @@ class TechniqueSession(BaseModel):
 class TechniqueDetail(Technique):
     sessions: list[TechniqueSession] = Field(default_factory=list)
 
+    # Sequences that arrive at this technique — "the ways I've gotten here".
+    sequences: list[Sequence] = Field(default_factory=list)
+
+
+class CreatedTechnique(BaseModel):
+    """Result of adding a technique by hand.
+
+    `created` is False when the name already existed — in that case only empty
+    fields were filled in, so nothing you had written was overwritten.
+    """
+
+    technique: TechniqueDetail
+    created: bool
+
 
 class TechniqueUpdate(BaseModel):
     name: str = Field(min_length=1)
     category: str | None = None
     position: str | None = None
     description: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    key_details: list[str] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
 
 
 class SessionCreate(BaseModel):

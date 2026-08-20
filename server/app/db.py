@@ -20,7 +20,28 @@ from pathlib import Path
 from . import config
 
 # Bump this and add a migration block in `migrate` when the schema changes.
-LATEST_VERSION = 1
+LATEST_VERSION = 3
+
+# Sequences are per-session and lossless: describing the same entry twice keeps
+# both descriptions, unlike techniques which dedup into a library. They are the
+# step-by-step "how you got there" — grips, motions, and the order of them.
+#
+# `technique_id` is ON DELETE SET NULL, not CASCADE: deleting a technique from
+# the library must not silently delete the sequences that reached it.
+_SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS sequences (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id   INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  steps        TEXT NOT NULL,
+  position     TEXT,
+  technique_id INTEGER REFERENCES techniques(id) ON DELETE SET NULL,
+  notes        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sequences_session ON sequences(session_id);
+CREATE INDEX IF NOT EXISTS idx_sequences_technique ON sequences(technique_id);
+"""
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -87,6 +108,17 @@ def _add_column_if_missing(
     conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {type_}")
 
 
+def _add_technique_detail_columns(conn: sqlite3.Connection) -> None:
+    """Structured detail about the move itself, as JSON arrays.
+
+    `description` stays as the one-line summary. Steps/key details/tips describe
+    how to *do* the move; how it chains with other moves lives in `sequences`.
+    """
+    _add_column_if_missing(conn, "techniques", "steps", "TEXT")
+    _add_column_if_missing(conn, "techniques", "key_details", "TEXT")
+    _add_column_if_missing(conn, "techniques", "tips", "TEXT")
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Bring the database up to LATEST_VERSION. Safe to run on every startup."""
     conn.execute("PRAGMA journal_mode = WAL")
@@ -96,10 +128,25 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.executescript(_SCHEMA_V1)
         version = 1
 
-    # Future migrations: `if version == 1: ...; version = 2`
+    if version == 1:
+        conn.executescript(_SCHEMA_V2)
+        version = 2
 
-    # Reconcile additive columns regardless of user_version. See module docstring.
+    if version == 2:
+        _add_technique_detail_columns(conn)
+        version = 3
+
+    # Future migrations: `if version == 3: ...; version = 4`
+
+    # Reconcile the schema regardless of user_version. See module docstring.
+    # Every statement here is idempotent (CREATE TABLE IF NOT EXISTS, and column
+    # adds guarded by PRAGMA table_info), so re-running costs nothing and
+    # repairs a database whose version advanced without the change landing.
+    # Tables come first: the column adds below need them to exist.
+    conn.executescript(_SCHEMA_V1)
+    conn.executescript(_SCHEMA_V2)
     _add_column_if_missing(conn, "sessions", "title", "TEXT")
+    _add_technique_detail_columns(conn)
 
     conn.execute(f"PRAGMA user_version = {LATEST_VERSION}")
     conn.commit()

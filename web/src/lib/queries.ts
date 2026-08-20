@@ -16,6 +16,7 @@ export const keys = {
   techniques: (params: { search?: string; sort?: TechniqueSort }) =>
     ['techniques', params] as const,
   technique: (id: number) => ['techniques', id] as const,
+  sequences: (search: string) => ['sequences', search] as const,
 };
 
 export function useSessions() {
@@ -45,13 +46,29 @@ export function useTechnique(id: number) {
   });
 }
 
+export function useSequences(search: string) {
+  return useQuery({
+    queryKey: keys.sequences(search),
+    queryFn: () => api.listSequences(search),
+  });
+}
+
 /** Invalidate everything a write could have touched. */
 function useInvalidateAll() {
   const client = useQueryClient();
   return () => {
     client.invalidateQueries({ queryKey: ['sessions'] });
     client.invalidateQueries({ queryKey: ['techniques'] });
+    client.invalidateQueries({ queryKey: ['sequences'] });
   };
+}
+
+export function useDeleteSequence() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteSequence(id),
+    onSuccess: invalidate,
+  });
 }
 
 export function useCreateSession() {
@@ -83,6 +100,14 @@ export function useDeleteSession() {
   const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: (id: number) => api.deleteSession(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateTechnique() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (text: string) => api.createTechnique(text),
     onSuccess: invalidate,
   });
 }
